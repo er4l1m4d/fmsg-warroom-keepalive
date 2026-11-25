@@ -1,0 +1,36 @@
+name: keep-awake
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: keep-awake
+  cancel-in-progress: false
+
+jobs:
+  wake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Wake the fmsg war room sandbox
+        env:
+          INSTABOX_API_KEY: ${{ secrets.INSTABOX_API_KEY }}
+          MACHINE: m_agq33hhvtb3u7mp5ezpeanqijm
+        run: |
+          set -uo pipefail
+          for attempt in 1 2 3; do
+            code=$(curl -sS -o /tmp/body -w "%{http_code}" -X POST \
+              "https://api.instabox.sh/v1/machines/$MACHINE/wake" \
+              -H "X-API-Key: $INSTABOX_API_KEY" || echo 000)
+            echo "attempt $attempt: HTTP $code"
+            head -c 300 /tmp/body || true
+            echo
+            case "$code" in
+              200|202|204|409) exit 0 ;;
+              000|5*) sleep 15 ;;
+              *) exit 1 ;;
+            esac
+          done
+          exit 1
